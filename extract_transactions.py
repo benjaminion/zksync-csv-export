@@ -4,8 +4,10 @@ import pandas as pd
 from datetime import datetime
 import csv
 
-def fac(asset):
-    return 1e-6 if (asset == "USDC" or asset == "USDT") else 1e-18
+def norm(qty, asset):
+    dps = 6 if (asset == "USDC" or asset == "USDT") else 18
+    tmp = qty.rjust(dps + 1, "0")
+    return (tmp[0:-dps] + "." + tmp[-dps:]).rstrip("0").rstrip(".")
 
 def main(in_class="mined", out_class="remove funds"):
 
@@ -87,9 +89,9 @@ def main(in_class="mined", out_class="remove funds"):
                 # Withdrawal to mainnet
                 if (td["type"] == "Withdraw"):
                     my_trx["Type"] = "Withdrawal"
-                    my_trx["Sell Quantity"] = float(td["amount"]) * fac(td["token"])
+                    my_trx["Sell Quantity"] = norm(td["amount"], td["token"])
                     my_trx["Sell Asset"] = td["token"]
-                    my_trx["Fee Quantity"] = float(td["fee"]) * fac(td["token"])
+                    my_trx["Fee Quantity"] = norm(td["fee"], td["token"])
                     my_trx["Fee Asset"] = td["token"]
 
                 elif (td["type"] == "Transfer"):
@@ -99,19 +101,19 @@ def main(in_class="mined", out_class="remove funds"):
                             my_trx["Type"] = "Spend"
                             my_trx["Sell Quantity"] = 0
                             my_trx["Sell Asset"] = td["token"]
-                            my_trx["Fee Quantity"] = float(td["fee"]) * fac(td["token"])
+                            my_trx["Fee Quantity"] = norm(td["fee"], td["token"])
                             my_trx["Fee Asset"] = td["token"]
                         # Incoming tx
                         else:
                             my_trx["Type"] = "Income"
-                            my_trx["Buy Quantity"] = float(td["amount"]) * fac(td["token"])
+                            my_trx["Buy Quantity"] = norm(td["amount"], td["token"])
                             my_trx["Buy Asset"] = td["token"]
                     # Outgoing tx
                     else:
                         my_trx["Type"] = "Spend"
-                        my_trx["Sell Quantity"] = float(td["amount"]) * fac(td["token"])
+                        my_trx["Sell Quantity"] = norm(td["amount"], td["token"])
                         my_trx["Sell Asset"] = td["token"]
-                        my_trx["Fee Quantity"] = float(td["fee"]) * fac(td["token"])
+                        my_trx["Fee Quantity"] = norm(td["fee"], td["token"])
                         my_trx["Fee Asset"] = td["token"]
 
                 # Swaps are too hard to populate: need to do it manually (e.g. token types are indexed)
