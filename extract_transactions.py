@@ -4,14 +4,10 @@ import pandas as pd
 from datetime import datetime
 import csv
 
+def fac(asset):
+    return 1e-6 if (asset == "USDC" or asset == "USDT") else 1e-18
 
 def main(in_class="mined", out_class="remove funds"):
-    """
-
-    Args:
-        in_class (str): Default classification for incoming transactions
-        out_class (str): Default classification for outgoing transactions
-    """
 
     wallet = os.environ["ETH_WALLET"]
     csv_path = "transactions.csv"
@@ -65,43 +61,73 @@ def main(in_class="mined", out_class="remove funds"):
 
             # init structure for csv
             my_trx = {
-                "transactionType": None,
-                "date": None,
-                "inBuyAmount": None,
-                "inBuyAsset": None,
-                "outSellAmount": None,
-                "outSellAsset": None,
-                "feeAsset (optional)": None,
-                "feeAmount (optional)": None,
+                "Type": None,
+                "Buy Quantity": None,
+                "Buy Asset": None,
+                "Buy Value": None,
+                "Sell Quantity": None,
+                "Sell Asset": None,
+                "Sell Value": None,
+                "Fee Quantity": None,
+                "Fee Asset": None,
+                "Fee Value": None,
+                "Wallet": "ZKSync",
+                "Timestamp": None,
             }
 
             my_date = t["created_at"]
 
             # convert to datetime object and then to format needed
-            # Accointing needs: ‘MM/DD/YYYY HH:mm:SS’
             dto = datetime.strptime(my_date, "%Y-%m-%dT%H:%M:%S.%f%z")
-            my_trx["date"] = dto.strftime("%m/%d/%Y %H:%M:%S")
+            my_trx["Timestamp"] = dto.strftime("%d/%m/%Y %H:%M:%S")
 
             # trx coming in
             try:
-                if td["to"].lower() == wallet.lower():
-                    my_trx["transactionType"] = "deposit"
-                    my_trx["inBuyAmount"] = float(td["amount"]) * 1e-18
-                    my_trx["inBuyAsset"] = td["token"]
-                    my_trx["classification (optional)"] = in_class
-                # trx going out
-                else:
-                    my_trx["transactionType"] = "withdraw"
-                    my_trx["outSellAmount"] = float(td["amount"]) * 1e-18
-                    my_trx["outSellAsset"] = td["token"]
-                    my_trx["classification (optional)"] = out_class
 
-                    my_trx["feeAsset (optional)"] = td["token"]
-                    my_trx["feeAmount (optional)"] = float(td["fee"]) * 1e-18
+                # Withdrawal to mainnet
+                if (td["type"] == "Withdraw"):
+                    my_trx["Type"] = "Withdrawal"
+                    my_trx["Sell Quantity"] = float(td["amount"]) * fac(td["token"])
+                    my_trx["Sell Asset"] = td["token"]
+                    my_trx["Fee Quantity"] = float(td["fee"]) * fac(td["token"])
+                    my_trx["Fee Asset"] = td["token"]
+
+                elif (td["type"] == "Transfer"):
+                    if td["to"].lower() == wallet.lower():
+                        # Some fee payments look like zero value transfers to oneself with fees
+                        if (td["from"].lower() == wallet.lower() and td["amount"] == "0" and td["fee"] != "0"):
+                            my_trx["Type"] = "Spend"
+                            my_trx["Sell Quantity"] = 0
+                            my_trx["Sell Asset"] = td["token"]
+                            my_trx["Fee Quantity"] = float(td["fee"]) * fac(td["token"])
+                            my_trx["Fee Asset"] = td["token"]
+                        # Incoming tx
+                        else:
+                            my_trx["Type"] = "Income"
+                            my_trx["Buy Quantity"] = float(td["amount"]) * fac(td["token"])
+                            my_trx["Buy Asset"] = td["token"]
+                    # Outgoing tx
+                    else:
+                        my_trx["Type"] = "Spend"
+                        my_trx["Sell Quantity"] = float(td["amount"]) * fac(td["token"])
+                        my_trx["Sell Asset"] = td["token"]
+                        my_trx["Fee Quantity"] = float(td["fee"]) * fac(td["token"])
+                        my_trx["Fee Asset"] = td["token"]
+
+                # Swaps are too hard to populate: need to do it manually (e.g. token types are indexed)
+                elif (td["type"] == "Swap"):
+                    my_trx["Type"] = "Trade"
+
+                # Ignore others like ChangePubKey
+                # Also, I don't know how deposits from L1 are categorised - I've never done one.
+                else:
+                    print(f"Warning: ignoring transaction type {td['type']}")
+                    continue
+
             except KeyError:
                 continue
 
-            my_trx["operationId (optional)"] = tx_hash
+            my_trx["operationId"] = tx_hash
 
             all_trx.append(my_trx)
 
